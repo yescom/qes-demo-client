@@ -12,7 +12,7 @@ import org.springframework.web.servlet.view.RedirectView
 import org.springframework.web.util.UriComponentsBuilder
 
 @RestController
-@SessionAttributes("oauthSession")
+@SessionAttributes("oauthSession", "documentSession")
 class RestController {
     data class Identity(val iss: String = "")
     data class RemoteSignatureCreation(
@@ -29,7 +29,8 @@ class RestController {
     @GetMapping("/qes/ac")
     fun accountChooserResult(
             @RequestParam issuer_url: String,
-            model: Model
+            model: Model,
+            @ModelAttribute("documentSession") docSess: DocumentSession
     ): RedirectView {
         println("Issuer URL: ${issuer_url}")
 
@@ -67,7 +68,11 @@ class RestController {
         println("OAuthSession: ${oauthSession}")
         model.addAttribute("oauthSession", oauthSession)
 
-        val requestURI = pushedAuthRequest(oauthConfiguration.pushed_authorization_request_endpoint, oauthSession)
+        val requestURI = pushedAuthRequest(
+                oauthConfiguration.pushed_authorization_request_endpoint,
+                oauthSession,
+                docSess
+        )
 
         val builder = UriComponentsBuilder
                 .fromUriString(oauthConfiguration.authorization_endpoint)

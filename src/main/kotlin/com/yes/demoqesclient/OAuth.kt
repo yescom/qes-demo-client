@@ -2,7 +2,6 @@ package com.yes.demoqesclient
 
 import com.nimbusds.jose.util.IOUtils
 import com.nimbusds.oauth2.sdk.*
-import com.nimbusds.oauth2.sdk.auth.ClientSecretBasic
 import com.nimbusds.oauth2.sdk.auth.SelfSignedTLSClientAuthentication
 import com.nimbusds.oauth2.sdk.id.ClientID
 import com.nimbusds.oauth2.sdk.id.State
@@ -10,33 +9,57 @@ import com.nimbusds.oauth2.sdk.pkce.CodeChallengeMethod
 import com.nimbusds.oauth2.sdk.pkce.CodeVerifier
 import com.nimbusds.openid.connect.sdk.AuthenticationRequest
 import com.nimbusds.openid.connect.sdk.OIDCTokenResponseParser
+import net.minidev.json.JSONArray
+import net.minidev.json.JSONObject
+import org.apache.http.HttpHost
+import org.apache.http.conn.ssl.NoopHostnameVerifier
 import org.apache.tomcat.util.codec.binary.Base64
-import java.io.FileInputStream
-import java.io.InputStream
-import java.net.URI
+import java.net.*
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.security.KeyFactory
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.cert.Certificate
+import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
-import javax.net.ssl.KeyManagerFactory
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.*
+import javax.net.ssl.X509TrustManager as X509TrustManager1
 
 val clientID = "sandbox.yes.com:0b59836f-5c46-46ff-ad84-853405c6f26e"
 val redirectURI = "http://localhost:9090/qes/oauth"
 
-data class OAuthSession(val oAuthConfiguration: OAuthConfiguration, val pkceVerifier: CodeVerifier = CodeVerifier(), val state: State = State())
+data class OAuthSession(
+        val oAuthConfiguration: OAuthConfiguration,
+        val pkceVerifier: CodeVerifier = CodeVerifier(), val state: State = State(),
+        val documentHash: String = ""
+)
 
 
-fun pushedAuthRequest(url: String, oauthSession: OAuthSession): String {
+fun pushedAuthRequest(url: String, oauthSession: OAuthSession, documentSession: DocumentSession): String {
     val endpoint = URI(url)
+
+    // Rich Authorization Request
+    val rar: String = """
+        [
+           {
+              "type":"sign", 
+              "locations":[ 
+                 "sp:sandbox.yes.com:85ac6820-8518-4aa1-ba85-de4307175b64"
+              ],
+              "credentialID":"qes_eidas", 
+              "documentDigests":[  
+                 {
+                    "hash":"${documentSession.hash}",
+                    "label":"UnsignedDocument"
+                 }
+              ],
+              "hashAlgorithmOID":"2.16.840.1.101.3.4.2.1" 
+           }
+        ]
+    """
 
     val authRequest = AuthenticationRequest.Builder(
             ResponseType("code"),
@@ -46,6 +69,7 @@ fun pushedAuthRequest(url: String, oauthSession: OAuthSession): String {
     )
             .codeChallenge(oauthSession.pkceVerifier, CodeChallengeMethod.S256)
             .state(oauthSession.state)
+            .customParameter("authorization_details", rar)
             .build()
 
     val clientAuth = SelfSignedTLSClientAuthentication(
@@ -60,6 +84,8 @@ fun pushedAuthRequest(url: String, oauthSession: OAuthSession): String {
     ).toHTTPRequest().apply {
         sslSocketFactory = sslContext.socketFactory
     }
+    // httpRequest.proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", 8080))
+    // httpRequest.hostnameVerifier = NoopHostnameVerifier.INSTANCE
     val httpResponse = httpRequest.send()
 
     val regResponse = PushedAuthorizationResponse.parse(httpResponse)
@@ -86,8 +112,8 @@ fun loadCertificate(): X509Certificate {
 fun loadPrivateKey(): PrivateKey {
     val inputStream = ClassLoader.getSystemClassLoader().getResourceAsStream("certificate/key.pem")
     val pemPrivateKey = IOUtils.readInputStreamToString(inputStream, StandardCharsets.US_ASCII).run {
-        val tmp = this.replace("-----BEGIN PRIVATE KEY-----","")
-        tmp.replace("-----END PRIVATE KEY-----","")
+        val tmp = this.replace("-----BEGIN PRIVATE KEY-----", "")
+        tmp.replace("-----END PRIVATE KEY-----", "")
     }
     val buffer = Base64.decodeBase64(pemPrivateKey)
     val spec: PKCS8EncodedKeySpec = PKCS8EncodedKeySpec(buffer)
@@ -115,9 +141,26 @@ fun createSSLContext(): SSLContext {
     val tmf: TrustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
     tmf.init(null as KeyStore?) // null here initialises the TMF with the default trust store.
 
+    // *********** Only for Debugging *********************************
+    // Create a trust manager that does not validate certificate chains
+    val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager1 {
+        @Throws(CertificateException::class)
+        override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {
+        }
+
+        @Throws(CertificateException::class)
+        override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {
+        }
+
+        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> {
+            return arrayOf()
+        }
+    })
+    // *****************************************************************
+
     // Create a new SSL context
     val sslContext: SSLContext = SSLContext.getInstance("TLS")
-    sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), SecureRandom())
+    sslContext.init(kmf.keyManagers, trustAllCerts, SecureRandom())
     return sslContext
 }
 

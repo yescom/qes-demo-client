@@ -28,6 +28,10 @@ dependencies {
 	}
 
 	implementation("com.nimbusds:oauth2-oidc-sdk:8.4.3")
+	implementation("com.itextpdf:itext7-core:7.1.12")
+	implementation("org.apache.httpcomponents:httpclient:4.5.10")
+	implementation("org.json:json:20200518")
+	implementation("org.apache.pdfbox:pdfbox:2.0.19")
 }
 
 tasks.withType<Test> {
