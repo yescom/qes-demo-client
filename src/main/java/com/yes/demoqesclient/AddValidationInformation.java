@@ -35,6 +35,10 @@ import java.lang.reflect.InvocationTargetException;
  * See also <a href="http://eprints.hsr.ch/id/eprint/616">Bachelor thesis (in German) about LTV</a>
  *
  * @author Alexis Suter
+ *
+ * ########################################################
+ * This class was changed to be used in a static context.
+ * ########################################################
  */
 public class AddValidationInformation {
     /**
