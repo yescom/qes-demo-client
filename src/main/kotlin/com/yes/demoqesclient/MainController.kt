@@ -38,16 +38,10 @@ class MainController {
         val accessToken = fetchToken(code, oAuthSession)
         model.addAttribute("access_code", accessToken)
 
-        val siganture = requestSignature(accessToken, docSess.hash)
-        boxEmbedSignature(docSess, siganture)
+        requestSignature(accessToken, docSess)
+        boxEmbedSignature(docSess)
 
         return "token"
     }
 
 }
-
-data class DocumentSession(
-        val hash: String,
-        val document: PDDocument,
-        val externalSigningSupport: ExternalSigningSupport
-)

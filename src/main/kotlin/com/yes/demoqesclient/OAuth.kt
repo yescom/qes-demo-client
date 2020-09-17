@@ -42,7 +42,7 @@ fun pushedAuthRequest(url: String, oauthSession: OAuthSession, documentSession: 
     val endpoint = URI(url)
 
     // Rich Authorization Request
-    val rar: String = """
+    val rar = """
         [
            {
               "type":"sign", 
@@ -160,7 +160,7 @@ fun createSSLContext(): SSLContext {
 
     // Create a new SSL context
     val sslContext: SSLContext = SSLContext.getInstance("TLS")
-    sslContext.init(kmf.keyManagers, trustAllCerts, SecureRandom())
+    sslContext.init(kmf.keyManagers, tmf.trustManagers, SecureRandom())
     return sslContext
 }
 
